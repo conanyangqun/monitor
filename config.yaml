@@ -5,4 +5,3 @@ services:
   - name: "My Services"
     api:
       - url: "https://github.com/conanyangqun"
-      - url: "https://health.shenjun.cc"
