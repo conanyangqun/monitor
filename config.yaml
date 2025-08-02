@@ -1,15 +1,8 @@
 services:
-  - name: "My Pages"
+  - name: "ShenJun's Blog"
     api:
-      - url: "https://blog.ch3nyang.top"
-      - url: "https://file.ch3nyang.top"
-      - url: "https://til.ch3nyang.top"
-      - url: "https://mind.ch3nyang.top"
+      - url: "https://blog.shenjun.cc"
   - name: "My Services"
-    health:
-      - url: "https://docker-registry.ch3nyang.top/health"
-      - url: "https://2024.ch3nyang.top/health"
     api:
-      - url: "https://docker-registry.ch3nyang.top/v2"
-        status_code: 401
-      - url: "https://2024.ch3nyang.top"
+      - url: "https://github.com/conanyangqun"
+      - url: "https://health.shenjun.cc"
