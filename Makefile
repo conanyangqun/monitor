@@ -3,7 +3,7 @@ PROJECT_NAME=ponghub
 BINARY=bin/$(PROJECT_NAME)
 SRC=cmd/$(PROJECT_NAME)/*.go
 
-.PHONY: all build run clean
+.PHONY: all build run test clean
 
 all: build
 
@@ -12,6 +12,9 @@ build:
 
 run: build
 	$(BINARY)
+
+test:
+	go test ./...
 
 clean:
 	del $(BINARY)

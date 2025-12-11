@@ -11,6 +11,7 @@ permissions:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: "🔄 Checkout code"
         uses: actions/checkout@v4
@@ -19,6 +20,14 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+
+      - name: "🔧 Setup environment variables from secrets"
+        env:
+          SECRETS_CONTEXT: ${{ toJSON(secrets) }}
+        run: |
+          echo "Setting up environment variables from GitHub secrets..."
+          echo "$SECRETS_CONTEXT" | jq -r 'to_entries[] | "\(.key)=\(.value)"' >> $GITHUB_ENV
+          echo "Environment variables configured from secrets"
 
       - name: "🏗️ Build and run PongHub"
         run: |
@@ -47,15 +56,25 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: publish
+          single-commit: true
           git-config-name: github-pages-deploy-action
           git-config-email: noreply@github.com
 
-      - name: "⚠️ Notify Unavailable Services"
+      - name: "⚠️ Handle Service Notifications"
         run: |
-          if [ -f data/notify.txt ] && [ -s data/notify.txt ]; then
-            echo "Unavailable services found:"
-            cat data/notify.txt
-            exit 1
+          if [ -f data/default_enabled.txt ] && [ -s data/default_enabled.txt ] && [ "$(cat data/default_enabled.txt)" = "true" ]; then
+            if [ -f data/notify.txt ] && [ -s data/notify.txt ]; then
+              echo "Service issues detected:"
+              cat data/notify.txt
+              echo "Default notification enabled, failing workflow."
+              exit 1
+            fi
           else
-            echo "No unavailable services."
+            if [ -f data/notify.txt ] && [ -s data/notify.txt ]; then
+              echo "Service issues detected:"
+              cat data/notify.txt
+              echo "Service issues have been reported through the configured notification channels."
+            else
+              echo "No service issues detected."
+            fi
           fi

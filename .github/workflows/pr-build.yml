@@ -1,0 +1,97 @@
+name: PR Build and Test
+
+on:
+  pull_request:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "🔄 Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "🐹 Set up Go"
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: "🔧 Setup environment variables from secrets"
+        env:
+          SECRETS_CONTEXT: ${{ toJSON(secrets) }}
+        run: |
+          echo "Setting up environment variables from GitHub secrets..."
+          echo "$SECRETS_CONTEXT" | jq -r 'to_entries[] | "\(.key)=\(.value)"' >> $GITHUB_ENV
+          echo "Environment variables configured from secrets"
+
+      - name: "🧪 Run Go tests"
+        run: |
+          go mod tidy
+          go test -v ./...
+
+      - name: "🔨 Build PongHub"
+        run: |
+          make build
+
+      - name: "🏗️ Build and run PongHub"
+        run: |
+          mkdir -p bin data
+          if [ ! -f data/ponghub_log.json ]; then
+            echo "[]" > data/ponghub_log.json
+            echo "Created empty log file for testing"
+          fi
+          make run || true
+
+      - name: "✅ Verify build artifacts"
+        run: |
+          echo "Checking generated files..."
+          if [ -f data/ponghub_log.json ]; then
+            echo "✅ Log file generated successfully"
+            echo "Log file size: $(wc -c < data/ponghub_log.json) bytes"
+          else
+            echo "❌ Log file not found"
+            exit 1
+          fi
+          
+          if [ -f data/index.html ]; then
+            echo "✅ Report HTML generated successfully"
+            echo "Report file size: $(wc -c < data/index.html) bytes"
+          else
+            echo "❌ Report HTML not found"
+            exit 1
+          fi
+
+      - name: "📋 Build Summary"
+        if: always()
+        run: |
+          echo "## 🎉 Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Generated Files" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f data/ponghub_log.json ]; then
+            LOG_SIZE=$(wc -c < data/ponghub_log.json)
+            echo "- ✅ **Log file**: Generated (${LOG_SIZE} bytes)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ **Log file**: Failed to generate" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f data/index.html ]; then
+            HTML_SIZE=$(wc -c < data/index.html)
+            echo "- ✅ **Report HTML**: Generated (${HTML_SIZE} bytes)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ **Report HTML**: Failed to generate" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f data/notify.txt ] && [ -s data/notify.txt ]; then
+            echo "- ⚠️ **Notifications**: Some services may be unavailable" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ✅ **Service Status**: All services appear to be healthy" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔧 Environment Variables" >> $GITHUB_STEP_SUMMARY
+          echo "Environment variables were successfully loaded from GitHub secrets." >> $GITHUB_STEP_SUMMARY

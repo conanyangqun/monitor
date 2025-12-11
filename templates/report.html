@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!--suppress ALL, CssUnusedSymbol -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6,16 +7,94 @@
     <title>Service Status Report</title>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="icon" href="/static/icon.png">
+    <style>
+        :root {
+            --primary-color: #0077cc;
+            --secondary-color: #f0f4fa;
+            --background-color: #f7fafd;
+            --red-color: #ff4136;
+            --yellow-color: #ffb700;
+            --green-color: #2ecc40;
+            --gray-color: #e0e0e0;
+            --white-color: #ffffff;
+        }
+        .container {
+            width: calc(12px * {{.DisplayNum}});
+        }
+        .service-header .status-bar,
+        .port-block .status-bar {
+            grid-template-columns: repeat({{.DisplayNum}}, 1fr) !important;
+        }
+        @media (max-width: calc(12px * {{.DisplayNum}})) {
+            .container {
+                width: 100%;
+                min-width: 0;
+                max-width: 100vw;
+                padding-left: 2px;
+                padding-right: 2px;
+                margin: 0;
+                border-radius: 0;
+                box-shadow: none;
+            }
+            .logo-img {
+                height: auto;
+                max-height: 96px;
+                max-width: 100%;
+            }
+            .update-time {
+                font-size: 0.92em;
+                margin-bottom: 10px;
+            }
+            .service-block {
+                padding: 10px 6px 10px 6px;
+                margin-bottom: 18px;
+                border-radius: 8px;
+            }
+            .service-header h2 {
+                font-size: 1.5em;
+            }
+            .service-header .availability-badge {
+                font-size: 1.5em;
+                padding: 6px 12px;
+            }
+            .service-header .status-bar,
+            .port-block .status-bar {
+                padding: 0;
+                column-gap: 0;
+            }
+            .status-bar .status-rect {
+                height: 18px;
+                margin: 0;
+                width: 100%;
+                box-shadow: none;
+                border-radius: 0;
+            }
+            .port-block {
+                margin-bottom: 12px;
+                padding: 6px 4px 4px 4px;
+                border-radius: 6px;
+                background: var(--secondary-color);
+                box-shadow: 0 1px 4px rgba(44, 124, 255, 0.04);
+            }
+            .port-block .port-url {
+                min-width: 80px;
+                font-size: 0.92em;
+                margin-bottom: 2px;
+                color: var(--primary-color);
+                font-weight: 500;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <img src="/static/logo.png" alt="Service Status Report" class="logo-img">
         <div class="update-time">Last Updated: {{.UpdateTime}}</div>
-        {{range .Results}}
+        {{range $ServiceReport := .ReportResult}}
         <div class="service-block">
             <div class="service-header">
-                <h2>{{.Name}}</h2>
-                {{ $last := index .History (sub (len .History) 1) }}
+                <h2>{{$ServiceReport.Name}}</h2>
+                {{ $last := index $ServiceReport.ServiceHistory (sub (len $ServiceReport.ServiceHistory) 1) }}
                 <div class="status-info status-info-{{ $last.Status }}">
                     <span class="status-ball"></span>
                     {{ if eq $last.Status "none" }}
@@ -27,24 +106,24 @@
                     {{ end }}
                 </div>
                 {{/* red < 95, 95 <= yellow < 100, green == 100 */}}
-                {{ $rate := mul .Availability 100 }}
+                {{ $rate := mul $ServiceReport.Availability 100 }}
                 <div class="availability-badge 
                     {{if lt $rate 95.0}}availability-red{{else if lt $rate 100.0}}availability-yellow{{else}}availability-green{{end}}">
                     <span class="availability-label">Availability</span>
                     <span class="availability-value">{{printf "%.1f" $rate}}%</span>
                 </div>
                 <div class="status-bar status-bar-header">
-                    {{ $len := len .History }}
-                    {{ if lt $len 72 }}
-                    {{ $missing := sub 72 $len }}
+                    {{ $len := len $ServiceReport.ServiceHistory }}
+                    {{ if lt $len $.DisplayNum }}
+                    {{ $missing := sub $.DisplayNum $len }}
                     {{ range $i := until $missing }}
                     <div class="status-rect status-unknown" title="No Result" data-time="No Data">
                         <div class="status-rect-content" style="height: 100%;"></div>
                     </div>
                     {{ end }}
                     {{ end }}
-                    {{ range $i, $h := .History }}
-                    {{ if ge $i (sub $len 72) }}
+                    {{ range $i, $h := $ServiceReport.ServiceHistory }}
+                    {{ if ge $i (sub $len $.DisplayNum) }}
                     <div class="status-rect status-{{ $h.Status }}" title="{{ $h.Time }}: {{ $h.Status }}" data-time="{{ $h.Time }}">
                         {{ if or (not $h.ResponseTime) (ge $h.ResponseTime 1000) }}
                         <div class="status-rect-content" style="height: 100%;"></div>
@@ -58,12 +137,34 @@
                     {{ end }}
                 </div>
             </div>
-            {{ range $url, $arr := .Ports }}
+            {{ range $endpoint := $ServiceReport.Endpoints }}
+            {{ $arr := $endpoint.EndpointHistory }}
             <div class="port-block">
                 {{ $last := index $arr (sub (len $arr) 1) }}
                 <div class="port-url status-info-{{ $last.Status }}">
                     <span class="status-ball"></span>
-                    {{$url}}
+                    <span class="url-text" title="{{$endpoint.URL}}">
+                        {{ if $endpoint.HighlightSegments }}
+                            {{ range $endpoint.HighlightSegments }}
+                                {{ if .IsHighlight }}
+                                    <span class="url-highlight">{{ .Text }}</span>
+                                {{ else }}
+                                    {{ .Text }}
+                                {{ end }}
+                            {{ end }}
+                        {{ else if $endpoint.DisplayURL }}
+                            {{$endpoint.DisplayURL}}
+                        {{ else }}
+                            {{$endpoint.URL}}
+                        {{ end }}
+                    </span>
+                    <div class="cert-status
+                        cert-status-{{ if not $endpoint.IsHTTPS }}gray{{ else if $endpoint.IsCertExpired }}red{{ else if le $endpoint.CertRemainingDays 30 }}yellow{{ else }}green{{ end }}"
+                        data-time="{{ if $endpoint.IsCertExpired }}Cert has expired{{ else }}Cert will expire in {{ $endpoint.CertRemainingDays }} days{{ end }}">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M21 11.5a1.504 1.504 0 0 0-1.5-1.5H18V7A6 6 0 0 0 6 7v3H4.5A1.504 1.504 0 0 0 3 11.5v10A1.504 1.504 0 0 0 4.5 23h15a1.504 1.504 0 0 0 1.5-1.5zM9 7a3 3 0 0 1 6 0v3H9zm4 8h-1v1h1v1h-1v1h1v1h-1v1h-1v-5h1v-1h1z"/>
+                        </svg>
+                    </div>
                 </div>
                 <div class="port-response-time">
                     {{/* red > 1000, 100 < yellow <= 1000, green <= 100 */}}
@@ -71,15 +172,15 @@
                         <span class="response-time-value response-time-red">-</span>
                     {{ else }}
                         <span class="response-time-value
-                            {{ if gt $last.ResponseTime 1000 }}response-time-red{{ else if le $last.ResponseTime 100 }}response-time-green{{ else }}response-time-yellow{{ end }}">
+                            {{ if gt $last.ResponseTime 500 }}response-time-red{{ else if le $last.ResponseTime 50 }}response-time-green{{ else }}response-time-yellow{{ end }}">
                             {{ $last.ResponseTime }} ms
                         </span>
                     {{ end }}
                 </div>
                 <div class="status-bar port-status-bar">
                     {{ $len := len $arr }}
-                    {{ if lt $len 72 }}
-                        {{ $missing := sub 72 $len }}
+                    {{ if lt $len $.DisplayNum }}
+                        {{ $missing := sub $.DisplayNum $len }}
                         {{ range $i := until $missing }}
                             <div class="status-rect status-unknown" title="No Result" data-time="No Data">
                                 <div class="status-rect-content" style="height: 100%;"></div>
@@ -87,14 +188,14 @@
                         {{ end }}
                     {{ end }}
                     {{ range $i, $h := $arr }}
-                        {{ if ge $i (sub $len 72) }}
+                        {{ if ge $i (sub $len $.DisplayNum) }}
                             <div class="status-rect status-{{ $h.Status }}" data-time="{{ $h.Time }}">
-                                {{ if or (not $h.ResponseTime) (ge $h.ResponseTime 1000) }}
+                                {{ if or (not $h.ResponseTime) (ge $h.ResponseTime 500) }}
                                     <div class="status-rect-content" style="height: 100%;"></div>
-                                {{ else if le $h.ResponseTime 100 }}
+                                {{ else if le $h.ResponseTime 50 }}
                                     <div class="status-rect-content" style="height: 10%;"></div>
                                 {{ else }}
-                                    <div class="status-rect-content" style="height: {{ div $h.ResponseTime 10 }}%;"></div>
+                                    <div class="status-rect-content" style="height: {{ div $h.ResponseTime 5 }}%;"></div>
                                 {{ end }}
                             </div>
                         {{ end }}
